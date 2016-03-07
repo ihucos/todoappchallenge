@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <title>Simple Task Management</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet">
+
+    <style type="text/css">
+      .task-title {
+        width: 100%;
+      }
+
+      .task .btn-group {
+        display: none;
+        margin-top: 1em;
+        border-bottom: 0.25em;
+      }
+
+      #main, .form-inline {
+        margin-top: 7rem;
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        text-align: center;
+      }
+
+      .col-md-4:nth-of-type(2) {
+        position: relative;
+        top: 2em;
+      }
+      .col-md-4:nth-of-type(3) {
+        position: relative;
+        top: 4em;
+      }
+
+    </style>
+
+  </head>
+  <body>
+
+    <center> <!-- using depraced center tag -->
+      <form class="form-inline">
+        <input style="width: 24em;" name="title" type="text" class="form-control" required="true" id="title" placeholder="Type your next ToDo here">
+        <input style="width: 8em;" name="price" type="number" step="0.01" class="form-control" required="true" id="price" placeholder="Price">
+        <input type="submit" class="btn btn-primary" value="Todo"></input>
+      </form>
+    </center>
+
+    <div class="col-md-4">
+      <h2>Todo</h2>
+      <table id='todo' class="table">
+        <tfoot>
+          <tr class="info"><th>Total</th><th><span class="badge total"></span></th></tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="col-md-4">
+      <h2>In Progess</h2>
+      <table id='doing' class="table">
+        <tfoot>
+          <tr class="info"><th>Total</th><th><span class="badge total"></span></th></tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="col-md-4">
+      <h2>Done</h2>
+      <table id='done' class="table">
+        <tfoot>
+          <tr class="info"><th>Total</th><th><span class="badge total"></span></th></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <table id="add-task-template" style='display: none'>
+      <tr class="task">
+        <td>
+          <input class="task-title form-control" disabled="disabled"></input>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-primary task-button-todo" type="button" data-state='todo'>todo</button>
+            <button class="btn btn-primary task-button-doing" type="button" data-state='doing'>doing</button>
+            <button class="btn btn-primary task-button-done" type="button" data-state='done'>done</button>
+            <button class="btn btn-danger task-button-deleted" type="button" data-state='deleted'>delete</button>
+          </div>
+        </td>
+        <td style="min-width: 3em;"><strong class="task-price badge"></strong></td>
+      </tr>
+    </table>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/accounting.js/0.4.1/accounting.min.js"></script>
+    <script>
+
+      $(document).ajaxError(function(){alert("This is an unspecified error message")})
+
+      function updateTask(task_id, fields){
+        // TODO: Lock editing until server response (possibly with an overlay)
+        $.post('/update_task/'+task_id, fields, function(data){
+          guiUpdateTask(data.task)
+          if (data.totals){
+            guiSetTotals(data.totals)
+          }
+        })
+      }
+
+      function guiSetTotals(totals){
+        $('.total').closest('table').parent().css('visibility', 'hidden')
+        $.each(totals, function(state, count){
+          $('#' + state).parent().css('visibility', 'visible'
+          ).find('.total') .text(
+            accounting.formatMoney(count, '€'))
+        })
+      }
+
+      function guiUpdateTask(task) {
+        var el = $($('#add-task-template').html())
+        el.attr('id', task.id)
+        el.attr('data-created', task.created)
+        el.find('.task-title').val(task.title)
+        el.find('.task-price').text(accounting.formatMoney(task.price, '€'))
+        el.find(".task-button-"+task.state).attr(
+          'disabled', 'disabled').removeClass('btn-primary').addClass('active')
+
+        el.find('.btn').click(function(){
+          var state = $(this).data('state')
+          updateTask(task.id, {state: state})
+        })
+
+        el.find('input').hover(function(){
+          $(this).removeAttr('disabled')
+          $(this).data('prev_title', $(this).val())
+        }, function(){
+          $(this).attr('disabled', 'disabled')
+          var prev_title = $(this).data('prev_title')
+          var new_title = $(this).val()
+          if (!new_title){
+            $(this).val(prev_title)
+          } else if (new_title != prev_title){
+            updateTask(task.id, {title: new_title})
+          }
+        })
+
+        el.find('input').focus(function(){
+          $('.btn-group').hide()
+          el.find('.btn-group').show()
+        })
+
+        // replace or append
+        if ($('#' + task.state + ' #' + task.id).length){
+          $('#' + task.id).replaceWith(el)
+        } else {
+          $('#' + task.id).remove()
+          // FIXME: append at the right position or resort all by created field
+          el.appendTo('#' + task.state)
+        }
+
+    }
+
+    $('form').submit(function(event){
+      postData = $(this).serialize()
+      $(this).find('#title').val('')
+      $(this).find('#price').val('')
+      $.post('/create_task', postData, function(data){
+        guiUpdateTask(data.task)
+        guiSetTotals(data.totals)
+      })
+      event.preventDefault();
+    })
+
+    function guiPopulate(){
+      $.get('/list_tasks', function(data){
+        guiSetTotals(data.totals)
+        $(data.tasks).each(function(_, task){
+          guiUpdateTask(task)
+        })
+      })
+    }
+    guiPopulate()
+
+    </script>
+  </body>
+</html>

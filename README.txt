@@ -1,1 +1,1 @@
-Implementation of a challenge during an job application process.
+Implementation of a challenge during a job application process.
